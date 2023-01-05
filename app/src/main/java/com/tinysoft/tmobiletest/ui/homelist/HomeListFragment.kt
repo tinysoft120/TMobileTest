@@ -9,6 +9,9 @@ import android.view.View
 import android.widget.Toast
 import androidx.core.view.doOnPreDraw
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -21,6 +24,7 @@ import com.tinysoft.tmobiletest.databinding.FragmentHomeListBinding
 import com.tinysoft.tmobiletest.dialog.CustomProgressDialog
 import com.tinysoft.tmobiletest.ui.AbsMainFragment
 import com.tinysoft.tmobiletest.ui.components.LoadingState
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class HomeListFragment : AbsMainFragment(R.layout.fragment_home_list) {
@@ -67,23 +71,29 @@ class HomeListFragment : AbsMainFragment(R.layout.fragment_home_list) {
             viewModel.clearListResult()
         }
 
-        viewModel.apiResults.observe(viewLifecycleOwner) {
-            Log.d(
-                TAG, "search - " +
-                    " result_count = ${it.items.size}," +
-                    " total_count=${it.totalCount}")
-            render(it)
-        }
-
         viewModel.loadingState.observe(viewLifecycleOwner) {
             Log.d(TAG, "loading state = $it")
             render(it)
         }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.cardListFlow.collect {
+                    Log.e(TAG, "update local Card List Num = ${it.size}")
+
+                    val state = HomeListViewState(it.size, it)
+                    viewModel.viewState = state
+                    render(state)
+                }
+            }
+        }
+
+        viewModel.fetchList()
+        viewModel.forceReload()
     }
 
     override fun onResume() {
         super.onResume()
-        viewModel.fetchList()
     }
 
     override fun onDestroyView() {
@@ -103,8 +113,6 @@ class HomeListFragment : AbsMainFragment(R.layout.fragment_home_list) {
             is LoadingState.LoadFailure -> {
                 dismissLoading()
                 Toast.makeText(requireContext(), state.errorMsg, Toast.LENGTH_SHORT).show()
-                binding.recyclerView.isVisible = false
-                binding.empty.isVisible = true
             }
         }
     }
@@ -112,16 +120,14 @@ class HomeListFragment : AbsMainFragment(R.layout.fragment_home_list) {
     private fun render(viewState: HomeListViewState) {
         with(binding) {
             listAdapter.swapDataSet(viewState.items)
-            if (viewState.offset == 0) {
-                recyclerView.smoothScrollToPosition(0)
-            }
+
             recyclerView.isVisible = viewState.items.isNotEmpty()
             empty.isVisible = viewState.items.isEmpty()
         }
     }
 
     private fun setupToolbar() {
-        // TODO: set order and grid feature up
+        // TODO: set grid feature up
     }
 
     private fun setupRecyclerView() {

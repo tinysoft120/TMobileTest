@@ -10,10 +10,6 @@ data class HomeListViewState(
     val totalCount: Int,
     val items: List<Card>
 ): Parcelable {
-
-    @IgnoredOnParcel
-    val offset get() = items.size
-
     companion object {
         val EMPTY = HomeListViewState(0, listOf())
     }

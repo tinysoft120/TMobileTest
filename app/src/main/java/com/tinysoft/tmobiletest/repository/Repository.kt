@@ -1,12 +1,15 @@
 package com.tinysoft.tmobiletest.repository
 
-import android.content.Intent
 import androidx.annotation.WorkerThread
 import com.google.gson.Gson
+import com.tinysoft.tmobiletest.db.CardDao
+import com.tinysoft.tmobiletest.db.CardRow
 import com.tinysoft.tmobiletest.network.RestApiService
 import com.tinysoft.tmobiletest.network.ResultWrapper
 import com.tinysoft.tmobiletest.network.model.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
@@ -23,6 +26,19 @@ interface Repository {
      * @return Response wrapper
      */
     suspend fun getHomeList() : ResultWrapper<List<Card>>
+
+    /**
+     * Store Home card list data from api [Card]s into Database.
+     * @param cards Card details from api
+     */
+    suspend fun storeCardList(cards: List<Card>)
+
+    /**
+     * Get all Card data from local databases.
+     * Return list of [Card].
+     * This method is synchronous.
+     */
+    suspend fun getCacheCardAll(): List<Card>
 }
 
 /**
@@ -30,6 +46,7 @@ interface Repository {
  */
 class RepositoryImpl(
     private val apiService: RestApiService,
+    private val cardDao: CardDao
 ) : Repository {
 
     @WorkerThread
@@ -109,4 +126,16 @@ class RepositoryImpl(
             ResultWrapper.GenericError(response.code(), response.message())
         }
     }
+
+    @WorkerThread
+    override suspend fun storeCardList(cards: List<Card>) {
+        // remove all previous data
+        cardDao.deleteAll()
+
+        // convert to DB rows
+        val rows = cards.mapIndexed { i, card -> CardRow.fromCard(i, card) }
+        cardDao.storeAllCards(rows)
+    }
+
+    override suspend fun getCacheCardAll(): List<Card> = cardDao.getAllCards().map { it.toCard() }
 }
